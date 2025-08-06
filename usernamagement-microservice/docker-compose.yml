@@ -1,0 +1,128 @@
+version: '2'
+
+services:
+
+  # frontend:
+  #   #image: front
+  #   build:
+  #     context: ../management-frontend
+  #   container_name: frontend
+  #   depends_on:
+  #     - devicemanagementback
+  #     - devicemanagementdb
+  #     - usermanagementback
+  #     - usermanagementdb
+  #   #environment:
+  #   #  - VUE_APP_USER_SERVICE_IP=http://usermanagement-back:8080
+  #   #  - VUE_APP_DEVICE_SERVICE_IP=http://devicemanagement-back:8080
+  #   ports:
+  #     - "3000:80"
+
+  devicemanagementback:
+    build: 
+      context: ../devices-microservice
+    container_name: devicemanagementspring
+    depends_on:
+      - devicemanagementdb
+      - rabbitmq
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://devicemanagementdb:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASS=guest
+      - SPRING_RABBITMQ_EXCHANGE=exchange
+      - SPRING_RABBITMQ_CONSUMPTIONQUEUE=consumptionqueue
+      - SPRING_RABBITMQ_DEVICEQUEUE=devicequeue
+      - SPRING_RABBITMQ_ROUTINGKEY=routingkey
+    ports:
+      - "8081:8080" 
+  
+  devicemanagementdb:
+    image: 'postgres'
+    container_name: devicemanagementdb
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=root
+    ports:
+      - "5434:5432"
+
+  usermanagementback:
+    #image: users
+    build: 
+    #  context: .
+    #  dockerfile: ./Dockerfile
+      context: .
+    container_name: usermanagementspring
+    depends_on:
+      - usermanagementdb
+      - devicemanagementdb
+      - devicemanagementback
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://usermanagementdb:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+      - DEVICE_SERVICE_IP=http://devicemanagementback:8080/sync
+    ports:
+      - "8080:8080" 
+  
+  usermanagementdb:
+    image: 'postgres'
+    container_name: usermanagementdb
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=root
+    ports:
+      - "5433:5432"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: 'rabbitmq'
+    ports:
+        - 5672:5672
+        - 15672:15672
+    volumes:
+        - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
+        - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+
+  monitorservice:
+    build: 
+      context: ../monitoring-microservice
+    container_name: monitoringservicespring
+    depends_on:
+      - rabbitmq
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://monitorservicedb:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASS=guest
+      - SPRING_RABBITMQ_EXCHANGE=exchange
+      - SPRING_RABBITMQ_CONSUMPTIONQUEUE=consumptionqueue
+      - SPRING_RABBITMQ_DEVICEQUEUE=devicequeue
+      - SPRING_RABBITMQ_ROUTINGKEY=monitor
+      - USER_SERVICE_IP=http://usermanagementback:8080/validate
+
+    ports:
+      - "8082:8080" 
+
+  chatservice:
+    build: 
+      context: ../chat-microservice
+    container_name: chatservicespring
+    ports:
+      - "8083:8080" 
+
+  monitorservicedb:
+    image: 'postgres'
+    container_name: monitorservicedb
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=root
+    ports:
+      - "5435:5432"
